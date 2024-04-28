@@ -1,6 +1,13 @@
+/*
+湖南创乐博智能科技有限公司
+编辑：朱林
+日期：2020年1月11日
+*/
+
+
 //% color="#31C7D5" weight=10 icon="\uf1d1"
 namespace makerobo {
-    const PCA9685_ADDRESS = 0x41
+    const PCA9685_ADDRESS = 0x40
     const MODE1 = 0x00
     const MODE2 = 0x01
     const SUBADR1 = 0x02
@@ -27,6 +34,16 @@ namespace makerobo {
 
     const STP_CHD_L = 3071
     const STP_CHD_H = 1023
+
+    // HT16K33 commands
+    const HT16K33_ADDRESS = 0x70
+    const HT16K33_BLINK_CMD = 0x80
+    const HT16K33_BLINK_DISPLAYON = 0x01
+    const HT16K33_BLINK_OFF = 0
+    const HT16K33_BLINK_2HZ = 1
+    const HT16K33_BLINK_1HZ = 2
+    const HT16K33_BLINK_HALFHZ = 3
+    const HT16K33_CMD_BRIGHTNESS = 0xE0
 
     export enum Servos {
         S1 = 0x01,
@@ -64,30 +81,20 @@ namespace makerobo {
         //% blockId="T5B0" block="5"
         T5B0 = 1800
     }
-
-    export enum enObstacle {
+    
+     export enum enObstacle {
         //% blockId="Obstacle" block="有障碍物"
         Obstacle = 0,
         //% blockId="NoObstacle" block="无障碍物"
         NoObstacle = 1
     }
 
-    export enum enflame {
+     export enum enflame {
         //% blockId="Flame" block="发现火焰"
         Flame = 0,
         //% blockId="NoFlame" block="无火焰"
         NoFlame = 1
     }
-
-    export enum PingUnit {
-        //% block="us"
-        MicroSeconds,
-        //% block="cm"
-        Centimeters,
-        //% block="inches"
-        Inches
-    }
-
     let initialized = false
     let initializedMatrix = false
     let neoStrip: neopixel.Strip;
@@ -117,7 +124,7 @@ namespace makerobo {
         i2cwrite(PCA9685_ADDRESS, MODE1, 0x00)
         setFreq(50);
         for (let idx = 0; idx < 16; idx++) {
-            setPwm(idx, 0, 0);
+            setPwm(idx, 0 ,0);
         }
         initialized = true
     }
@@ -144,7 +151,7 @@ namespace makerobo {
         //serial.writeValue("ch", channel)
         //serial.writeValue("on", on)
         //serial.writeValue("off", off)
-
+        
         let buf = pins.createBuffer(5);
         buf[0] = LED0_ON_L + 4 * channel;
         buf[1] = on & 0xff;
@@ -154,21 +161,6 @@ namespace makerobo {
         pins.i2cWriteBuffer(PCA9685_ADDRESS, buf);
     }
 
-    //% blockId=robotbit_setLeveL block="控制声音传感器|%index|电平 %value"
-    //% weight=99
-    //% blockGap=50
-    //% name.fieldEditor="gridpicker" name.fieldOptions.columns=4
-    export function setLevel(index: Servos, value: boolean): void {
-        if (!initialized) {
-            initPCA9685()
-        }
-        if (value == true) {
-            setPwm(index + 7, 0, 4095);
-        }
-        else {
-            setPwm(index + 7, 0, 0);
-        }
-    }
 
     function setStepper(index: number, dir: boolean): void {
         if (index == 1) {
@@ -201,6 +193,17 @@ namespace makerobo {
     function stopMotor(index: number) {
         setPwm((index - 1) * 2, 0, 0);
         setPwm((index - 1) * 2 + 1, 0, 0);
+    }
+
+    function matrixInit() {
+        i2ccmd(HT16K33_ADDRESS, 0x21);// turn on oscillator
+        i2ccmd(HT16K33_ADDRESS, HT16K33_BLINK_CMD | HT16K33_BLINK_DISPLAYON | (0 << 1));
+        i2ccmd(HT16K33_ADDRESS, HT16K33_CMD_BRIGHTNESS | 0xF);
+    }
+
+    function matrixShow() {
+        matBuf[0] = 0x00;
+        pins.i2cWriteBuffer(HT16K33_ADDRESS, matBuf);
     }
 
 
@@ -251,11 +254,11 @@ namespace makerobo {
             initPCA9685()
         }
         // 50hz: 20,000 us
-        let v_us = ((degree - 90) * 20 / 3 + 1500) // 0.6 ~ 2.4
+        let v_us = ((degree -90) * 20 / 3 + 1500) // 0.6 ~ 2.4
         let value = v_us * 4096 / 20000
         setPwm(index + 7, 0, value)
     }
-
+    
     //% blockId=robotbit_motor_run block="电机|%index|速度 %speed"
     //% weight=85
     //% speed.min=-255 speed.max=255
@@ -283,6 +286,7 @@ namespace makerobo {
             setPwm(pn, 0, -speed)
         }
     }
+
 
     /**
      * Execute two motors at the same time
@@ -334,7 +338,18 @@ namespace makerobo {
             stopMotor(idx);
         }
     }
-
+    
+    //% blockId=Microbit_Sensor_Sound block="声音传感器|管脚 %pin"
+    //% weight=99
+    //% blockGap=20
+    //% color="#228B22"
+    //% name.fieldEditor="gridpicker" name.fieldOptions.columns=5
+    export function Sound(pin: AnalogPin): number {
+        let value: number;
+        value = pins.analogReadPin(pin);
+        return value;
+    }
+    
     //% blockId=Microbit_Sensor_IR block="红外避障传感器|引脚 %pin|值 %value"
     //% weight=96
     //% blockGap=20
@@ -353,21 +368,5 @@ namespace makerobo {
     export function flame(pin: DigitalPin, value: enflame): boolean {
         pins.setPull(pin, PinPullMode.PullUp);
         return pins.digitalReadPin(pin) == value;
-    }
-
-    //% blockId=Microbit_ping block="超声波模块|echo %echo|unit %unit"
-    export function ping(echo: DigitalPin, unit: PingUnit, maxCmDistance = 500): number {
-
-        setLevel(Servos.S3, false);
-        setLevel(Servos.S3, true);
-        setLevel(Servos.S3, false);
-
-        const d = pins.pulseIn(echo, PulseValue.High, maxCmDistance * 58);
-
-        switch (unit) {
-            case PingUnit.Centimeters: return Math.idiv(d, 58);
-            case PingUnit.Inches: return Math.idiv(d, 148);
-            default: return d;
-        }
-    }
+    }    
 }
