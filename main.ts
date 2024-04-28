@@ -39,7 +39,7 @@ namespace k_Bit {
     /**
      * use for control PCA9685
      */
-    const PCA9685_ADDRESS = 0x43;   //device address
+    const PCA9685_ADDRESS = 0x40;   //device address
     const MODE1 = 0x00;
     const MODE2 = 0x01;
     const SUBADR1 = 0x02;
